@@ -30,7 +30,7 @@ const (
 	maxBody      = 1024 * 1024
 	maxPenalty   = 25
 	cleanMax     = 15
-	serveAddr    = "127.0.0.1:18743"
+	defServeAddr = "127.0.0.1:18743"
 )
 
 // Страница интерфейса зашита внутрь программы, отдельных файлов не нужно.
@@ -705,12 +705,8 @@ func loadGSBKey() string {
 	return gsbKey
 }
 
-// Спрашивает у Google, считает ли он ссылку опасной.
-func gsbListed(pageURL string) bool {
-	key := loadGSBKey()
-	if key == "" {
-		return false
-	}
+// Общий запрос к Google. Возвращает код ответа и есть ли совпадение.
+func gsbQuery(key, pageURL string) (int, bool) {
 	payload := map[string]any{
 		"client": map[string]any{"clientId": "pinterest-trust-check", "clientVersion": "1.0"},
 		"threatInfo": map[string]any{
@@ -724,25 +720,94 @@ func gsbListed(pageURL string) bool {
 	client := &http.Client{Timeout: timeoutMs * time.Millisecond}
 	req, err := http.NewRequest("POST", "https://safebrowsing.googleapis.com/v4/threatMatches:find?key="+url.QueryEscape(key), strings.NewReader(string(data)))
 	if err != nil {
-		return false
+		return 0, false
 	}
 	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
-		return false
+		return 0, false
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 65536))
 	if err != nil {
-		return false
+		return res.StatusCode, false
 	}
 	var out struct {
 		Matches []any `json:"matches"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
+		return res.StatusCode, false
+	}
+	return res.StatusCode, len(out.Matches) > 0
+}
+
+// Проверка ключа через безвредный адрес. Пусто — ключ рабочий.
+func validateGSBKey(key string) string {
+	status, _ := gsbQuery(key, "https://example.com/")
+	switch {
+	case status == 0:
+		return "не вышло связаться с Google, попробуй позже"
+	case status == 400 || status == 401 || status == 403:
+		return "Google ключ отклонил — проверь, что скопировал целиком"
+	case status != 200:
+		return "Google ответил ошибкой — попробуй позже"
+	default:
+		return ""
+	}
+}
+
+// Спрашивает у Google, считает ли он ссылку опасной.
+func gsbListed(pageURL string) bool {
+	key := loadGSBKey()
+	if key == "" {
 		return false
 	}
-	return len(out.Matches) > 0
+	status, listed := gsbQuery(key, pageURL)
+	return status == 200 && listed
+}
+
+// Ключ из браузера: показать состояние и сохранить новый. Сам ключ наружу не отдаём.
+func apiKey(w http.ResponseWriter, req *http.Request) {
+	_, dir := linksSpot()
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if req.Method == "GET" {
+		set := loadGSBKey() != ""
+		data, _ := json.Marshal(map[string]any{"set": set})
+		_, _ = w.Write(data)
+		return
+	}
+	if req.Method != "POST" {
+		http.Error(w, "не тот запрос", http.StatusMethodNotAllowed)
+		return
+	}
+	body, _ := io.ReadAll(io.LimitReader(req.Body, 4096))
+	var in struct {
+		Key string `json:"key"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": "не прочитал ключ"})
+		_, _ = w.Write(data)
+		return
+	}
+	key := strings.TrimSpace(in.Key)
+	if len(key) < 10 || strings.ContainsAny(key, " \t\n") {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": "похоже, это не ключ — вставь целиком"})
+		_, _ = w.Write(data)
+		return
+	}
+	if msg := validateGSBKey(key); msg != "" {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": msg})
+		_, _ = w.Write(data)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, "gsb.key"), []byte(key+"\n"), 0600); err != nil {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": "не записался файл"})
+		_, _ = w.Write(data)
+		return
+	}
+	gsbKey = key
+	data, _ := json.Marshal(map[string]any{"ok": true})
+	_, _ = w.Write(data)
 }
 
 // Короткая запись баллов по пунктам, чтобы ловить скачки: R30 T25 S10 H1 A8 C15.
@@ -1114,6 +1179,14 @@ func apiCheck(w http.ResponseWriter, req *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// Адрес страницы: обычно стандартный, но порт можно сменить переменной PINTEREST_PORT.
+func serveAddr() string {
+	if p := strings.TrimSpace(os.Getenv("PINTEREST_PORT")); p != "" {
+		return "127.0.0.1:" + p
+	}
+	return defServeAddr
+}
+
 // Интерфейс в браузере: только этот компьютер, наружу ничего не торчит.
 func serve() {
 	mux := http.NewServeMux()
@@ -1126,6 +1199,7 @@ func serve() {
 		_, _ = io.WriteString(w, pageHTML)
 	})
 	mux.HandleFunc("/api/check", apiCheck)
+	mux.HandleFunc("/api/key", apiKey)
 	mux.HandleFunc("/api/history", func(w http.ResponseWriter, req *http.Request) {
 		_, dir := linksSpot()
 		clear := req.Method == "DELETE"
@@ -1147,11 +1221,11 @@ func serve() {
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, req *http.Request) {
 		_, _ = io.WriteString(w, "ok")
 	})
-	url := "http://" + serveAddr + "/"
+	url := "http://" + serveAddr() + "/"
 	fmt.Println("Открываю страницу " + url)
 	fmt.Println("Закрой это окно, чтобы остановить.")
 	_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	if err := http.ListenAndServe(serveAddr, mux); err != nil {
+	if err := http.ListenAndServe(serveAddr(), mux); err != nil {
 		fmt.Println("Не запустилось:", err)
 		fmt.Println("Возможно, уже открыта вторая копия — закрой её.")
 	}

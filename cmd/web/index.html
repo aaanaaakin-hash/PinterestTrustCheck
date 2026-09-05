@@ -46,6 +46,15 @@
     font-size: 14px;
     resize: vertical;
   }
+  input[type="password"] {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+  }
   button {
     background: var(--accent);
     color: #fff;
@@ -108,6 +117,15 @@
     <br>
     <button id="go" onclick="run()">Проверить</button>
     <div class="progress" id="progress"></div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin:0 0 8px;font-size:15px;">Ключ Google <span id="keyState" style="color:var(--muted);font-weight:400;"></span></h3>
+    <div class="hint" style="margin:0 0 8px;">Не обязателен, но рекомендуется как страховка. Вставь ключ — программа сама всё подключит и проверит. Как добыть ключ — в README.md.</div>
+    <input id="keyInput" type="password" placeholder="Вставь ключ сюда">
+    <br>
+    <button onclick="saveKey()">Сохранить ключ</button>
+    <div class="progress" id="keyMsg"></div>
   </div>
 
   <div class="panel">
@@ -282,7 +300,41 @@ async function loadHistory() {
   } catch (e) { /* молча */ }
 }
 
+async function keyStatus() {
+  try {
+    const res = await fetch('/api/key');
+    const j = await res.json();
+    document.getElementById('keyState').textContent = j.set ? '— подключён' : '— нет ключа';
+  } catch (e) { /* молча */ }
+}
+
+async function saveKey() {
+  const input = document.getElementById('keyInput');
+  const m = document.getElementById('keyMsg');
+  const k = input.value.trim();
+  if (!k) { m.textContent = 'Вставь ключ сначала.'; return; }
+  m.textContent = 'Проверяю ключ у Google...';
+  try {
+    const res = await fetch('/api/key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: k })
+    });
+    const j = await res.json();
+    if (j.ok) {
+      m.textContent = 'Ключ сохранён, Google подключён.';
+      input.value = '';
+    } else {
+      m.textContent = 'Не сохранил: ' + (j.error || 'проверь ключ и попробуй снова');
+    }
+  } catch (e) {
+    m.textContent = 'Нет связи с программой.';
+  }
+  keyStatus();
+}
+
 loadHistory();
+keyStatus();
 </script>
 </body>
 </html>
