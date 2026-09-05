@@ -121,10 +121,13 @@
 
   <div class="panel">
     <h3 style="margin:0 0 8px;font-size:15px;">Ключ Google <span id="keyState" style="color:var(--muted);font-weight:400;"></span></h3>
-    <div class="hint" style="margin:0 0 8px;">Не обязателен, но рекомендуется как страховка. Вставь ключ — программа сама всё подключит и проверит. Как добыть ключ — в README.md.</div>
-    <input id="keyInput" type="password" placeholder="Вставь ключ сюда">
-    <br>
-    <button onclick="saveKey()">Сохранить ключ</button>
+    <div id="keyForm">
+      <div class="hint" style="margin:0 0 8px;">Не обязателен, но рекомендуется как страховка. Вставь ключ — программа сама всё подключит и проверит. Как добыть ключ — в README.md.</div>
+      <input id="keyInput" type="password" placeholder="Вставь ключ сюда">
+      <br>
+      <button onclick="saveKey()">Сохранить ключ</button>
+    </div>
+    <div id="keyDone" class="hint" style="display:none;margin:0;">Google подключён. <a href="#" onclick="showKeyForm();return false;" style="color:var(--accent);">Сменить ключ</a></div>
     <div class="progress" id="keyMsg"></div>
   </div>
 
@@ -304,8 +307,17 @@ async function keyStatus() {
   try {
     const res = await fetch('/api/key');
     const j = await res.json();
-    document.getElementById('keyState').textContent = j.set ? '— подключён' : '— нет ключа';
+    const has = !!j.set;
+    document.getElementById('keyState').textContent = has ? '— подключён' : '— нет ключа';
+    document.getElementById('keyForm').style.display = has ? 'none' : 'block';
+    document.getElementById('keyDone').style.display = has ? 'block' : 'none';
   } catch (e) { /* молча */ }
+}
+
+function showKeyForm() {
+  document.getElementById('keyForm').style.display = 'block';
+  document.getElementById('keyDone').style.display = 'none';
+  document.getElementById('keyMsg').textContent = '';
 }
 
 async function saveKey() {
