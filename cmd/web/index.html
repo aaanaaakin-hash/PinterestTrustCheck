@@ -110,7 +110,7 @@
 <body>
 <div class="wrap">
   <h1>Проверка доверия Pinterest</h1>
-  <div class="sub">Вставь ссылки, по одной на строку. Это наш индекс 0–100, а не внутренняя цифра Pinterest.</div>
+  <div class="sub">Вставь ссылки, по одной на строку. Это наш индекс 0–100, а не внутренняя цифра Pinterest. <span id="ver"></span></div>
 
   <div class="panel">
     <textarea id="links" placeholder="amazon.com&#10;https://example.com/page&#10;sites.google.com"></textarea>
@@ -348,6 +348,14 @@ async function saveKey() {
 
 loadHistory();
 keyStatus();
+
+(async function showVersion() {
+  try {
+    const res = await fetch('/api/version');
+    const j = await res.json();
+    if (j.version) document.getElementById('ver').textContent = 'Версия ' + j.version + '.';
+  } catch (e) { /* молча */ }
+})();
 </script>
 </body>
 </html>
