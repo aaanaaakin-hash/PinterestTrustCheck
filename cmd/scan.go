@@ -183,9 +183,23 @@ func tlsInfo(addr, server string) tlsOut {
 }
 
 // Возраст домена через открытый RDAP. Может не ответить — тогда нейтрально.
+// Для .com/.net есть запасной справочник, если общий молчит.
 func rdapAge(host string) *int {
+	urls := []string{"https://rdap.org/domain/" + url.PathEscape(host)}
+	if strings.HasSuffix(host, ".com") || strings.HasSuffix(host, ".net") {
+		urls = append(urls, "https://rdap.verisign.com/com/v1/domain/"+url.PathEscape(host))
+	}
+	for _, u := range urls {
+		if m := rdapMonths(u); m != nil {
+			return m
+		}
+	}
+	return nil
+}
+
+func rdapMonths(u string) *int {
 	client := &http.Client{Timeout: timeoutMs * time.Millisecond}
-	req, _ := http.NewRequest("GET", "https://rdap.org/domain/"+url.PathEscape(host), nil)
+	req, _ := http.NewRequest("GET", u, nil)
 	req.Header.Set("User-Agent", uaBrowser)
 	req.Header.Set("Accept", "application/json")
 	res, err := client.Do(req)
@@ -529,15 +543,20 @@ func checkOne(link string) check.Result {
 	}
 	r.Checks = append(r.Checks, check.CheckPart{Name: "Заголовки", Got: hg, Max: 5, Note: hnote})
 
-	// Возраст.
+	// Возраст. Молодым доменам режем потолок: зелёный надо заслужить годами.
+	ageCap := -1
 	if months := ageFn(host); months == nil {
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 5, Max: 15, Note: "возраст узнать не вышло — считаем с опаской"})
 	} else if *months >= 24 {
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 15, Max: 15, Note: fmt.Sprintf("домену ~%d г. — старый, это плюс", *months/12)})
 	} else if *months >= 12 {
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 10, Max: 15, Note: fmt.Sprintf("домену ~%d мес. — средний", *months)})
+	} else if *months >= 6 {
+		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 5, Max: 15, Note: fmt.Sprintf("домену ~%d мес. — молодой, выше жёлтого не поднимем", *months)})
+		ageCap = 79
 	} else {
-		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 3, Max: 15, Note: fmt.Sprintf("домену ~%d мес. — молодой, Pinterest строже", *months)})
+		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 3, Max: 15, Note: fmt.Sprintf("домену ~%d мес. — совсем молодой, выше оранжевого не поднимем", *months)})
+		ageCap = 59
 	}
 
 	// Штрафы.
@@ -648,6 +667,9 @@ func checkOne(link string) check.Result {
 	// Google внёс в чёрный список — выше оранжевого не поднимем, как бы всё остальное ни блестело.
 	if gsbHit {
 		caps = append(caps, 35)
+	}
+	if ageCap >= 0 {
+		caps = append(caps, ageCap)
 	}
 	for _, c := range caps {
 		if score > c {

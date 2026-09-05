@@ -281,6 +281,47 @@ func TestCheckOneBadInput(t *testing.T) {
 	}
 }
 
+func TestCheckOneYoungCap(t *testing.T) {
+	stubEnv(t)
+	m3 := 3
+	oldAge := ageFn
+	ageFn = func(string) *int { return &m3 }
+	defer func() { ageFn = oldAge }()
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(goodPage))
+	}))
+	defer ts.Close()
+	port := testPort(ts)
+	newScanClient = func() *http.Client { return testClient(port) }
+
+	r := checkOne("https://testcheck.local:" + port + "/")
+	if r.Score > 59 {
+		t.Errorf("домену 3 мес.: балл %d, ждали не больше 59", r.Score)
+	}
+}
+
+func TestCheckOneHalfYearCap(t *testing.T) {
+	stubEnv(t)
+	m8 := 8
+	oldAge := ageFn
+	ageFn = func(string) *int { return &m8 }
+	defer func() { ageFn = oldAge }()
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(goodPage))
+	}))
+	defer ts.Close()
+	port := testPort(ts)
+	newScanClient = func() *http.Client { return testClient(port) }
+
+	r := checkOne("https://testcheck.local:" + port + "/")
+	if r.Score > 79 {
+		t.Errorf("домену 8 мес.: балл %d, ждали не больше 79", r.Score)
+	}
+	if r.Score < 60 {
+		t.Errorf("домену 8 мес.: балл %d, ждали жёлтую зону", r.Score)
+	}
+}
+
 func TestTLSInfoReal(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer ts.Close()
