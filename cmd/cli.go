@@ -32,6 +32,10 @@ func printOne(r check.Result) {
 			fmt.Printf("  - %s\n", s)
 		}
 	}
+	fmt.Println("\nПочитай сам:")
+	for _, l := range check.ReadLinks(r.Host) {
+		fmt.Printf("  - %s: %s\n", l.Name, l.URL)
+	}
 }
 
 func printTable(list []check.Result) {

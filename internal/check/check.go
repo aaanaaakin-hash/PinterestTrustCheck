@@ -12,7 +12,7 @@ import (
 )
 
 // Номер версии — показывается на странице и в консоли, чтобы не путать сборки.
-const AppVersion = "1.7.0"
+const AppVersion = "1.8.0"
 
 var (
 	reMetaRefresh = regexp.MustCompile(`(?i)<meta[^>]+http-equiv=["']?refresh`)
@@ -234,4 +234,20 @@ func ServeAddr() string {
 		}
 	}
 	return defServeAddr
+}
+
+// Готовые ссылки для чтения глазами: что пишут про домен.
+// Программа ничего не ищет — только подставляет домен в шаблон поиска.
+type ReadLink struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+func ReadLinks(host string) []ReadLink {
+	return []ReadLink{
+		{"Google: отзывы про домен", "https://www.google.com/search?q=" + url.QueryEscape(`"`+host+`" pinterest`)},
+		{"Google: баны и жалобы", "https://www.google.com/search?q=" + url.QueryEscape("pinterest ban "+host+" spam")},
+		{"Reddit: свежие треды", "https://www.reddit.com/search/?q=pinterest+cloaking+ban&sort=new"},
+		{"Bing: запасной поиск", "https://www.bing.com/search?q=" + url.QueryEscape(`"`+host+`"`)},
+	}
 }

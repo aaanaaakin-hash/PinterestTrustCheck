@@ -307,7 +307,26 @@ function detailHTML(r) {
   for (const x of (r.hops || [])) {
     h += `<div class="check"><span class="ic info">➔</span><div><div class="ct link" style="font-size:13px;">${esc(x)}</div></div></div>`;
   }
+  h += `<div class="sec-t">Почитай сам:</div><div class="checks">`;
+  for (const l of readLinks(r.host || '')) {
+    h += `<div class="check"><span class="ic info">🔎</span><div><div class="ct" style="font-size:13px;"><a href="${l.url}" target="_blank" rel="noopener" style="color:var(--accent);">${esc(l.name)}</a></div></div></div>`;
+  }
+  h += '</div>';
   return h;
+}
+
+// Ссылки поиска собираем тут же, в браузере: программа ничего не ищет,
+// только подставляет домен в шаблон. Запросы на английском — так ответы полнее.
+function readLinks(host) {
+  const q = encodeURIComponent('"' + host + '" pinterest');
+  const q2 = encodeURIComponent('pinterest ban ' + host + ' spam');
+  const q3 = encodeURIComponent('"' + host + '"');
+  return [
+    { name: 'Google: отзывы про домен', url: 'https://www.google.com/search?q=' + q },
+    { name: 'Google: баны и жалобы', url: 'https://www.google.com/search?q=' + q2 },
+    { name: 'Reddit: свежие треды', url: 'https://www.reddit.com/search/?q=pinterest+cloaking+ban&sort=new' },
+    { name: 'Bing: запасной поиск', url: 'https://www.bing.com/search?q=' + q3 }
+  ];
 }
 
 const HIST_NAMES = { R: 'Редиректы', T: 'Шифрование', S: 'Скорость', H: 'Заголовки', A: 'Возраст', C: 'Чистота' };
