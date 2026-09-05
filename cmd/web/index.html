@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Проверка доверия Pinterest</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #2f81f7;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --orange: #db6d28;
+    --red: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 24px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 110px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    resize: vertical;
+  }
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 22px;
+    font-size: 15px;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .progress { color: var(--muted); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: rgba(255,255,255,0.03); }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .b-green { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid var(--green); }
+  .b-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid var(--yellow); }
+  .b-orange { background: rgba(219,109,40,0.15); color: var(--orange); border: 1px solid var(--orange); }
+  .b-red { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid var(--red); }
+  .bar { height: 8px; background: #21262d; border-radius: 4px; margin-top: 6px; min-width: 90px; }
+  .bar > div { height: 100%; border-radius: 4px; }
+  .link { word-break: break-all; }
+  .detail { display: none; }
+  .detail td { background: rgba(255,255,255,0.02); font-size: 13px; }
+  .detail ul { margin: 6px 0; padding-left: 20px; }
+  .detail li { margin-bottom: 3px; }
+  .note-warn { color: var(--orange); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  .fin { font-size: 13px; margin-bottom: 10px; }
+  .checks { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .ic.ok { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid var(--green); }
+  .ic.mid { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid var(--yellow); }
+  .ic.bad { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid var(--red); }
+  .ct { font-size: 14px; }
+  .ct b { color: var(--green); }
+  .cn { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .sec-t { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
+  .hdet { font-size: 12px; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Проверка доверия Pinterest</h1>
+  <div class="sub">Вставь ссылки, по одной на строку. Это наш индекс 0–100, а не внутренняя цифра Pinterest.</div>
+
+  <div class="panel">
+    <textarea id="links" placeholder="amazon.com&#10;https://example.com/page&#10;sites.google.com"></textarea>
+    <br>
+    <button id="go" onclick="run()">Проверить</button>
+    <div class="progress" id="progress"></div>
+  </div>
+
+  <div class="panel">
+    <table>
+      <thead><tr><th>Балл</th><th>Статус</th><th>Ссылка</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="hint">Вся проверка расписана прямо под каждой строкой: баллы по пунктам, путь ссылки, предупреждения. Нажми на строку, чтобы свернуть. Зелёный 80+ — спокойно, жёлтый 60+ — следи за показами, оранжевый и красный — готовь запасной домен.</div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin:0 0 8px;font-size:15px;">История проверок
+      <button onclick="clearHistory()" style="margin:0 0 0 10px;padding:5px 14px;font-size:12px;background:#21262d;border:1px solid var(--border);">Очистить</button>
+    </h3>
+    <div class="hint" style="margin:0 0 8px;">Каждая проверка дописывается сюда с датой. Видно, если домен со временем желтеет. <span id="histStatus"></span></div>
+    <table>
+      <thead><tr><th>Когда</th><th>Балл</th><th>Статус</th><th>Ссылка</th></tr></thead>
+      <tbody id="hist"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const rows = document.getElementById('rows');
+const progress = document.getElementById('progress');
+const btn = document.getElementById('go');
+
+function badge(word) {
+  const cls = { 'ЗЕЛЁНЫЙ': 'b-green', 'ЖЁЛТЫЙ': 'b-yellow', 'ОРАНЖЕВЫЙ': 'b-orange', 'КРАСНЫЙ': 'b-red' }[word] || 'b-red';
+  return `<span class="badge ${cls}">${word}</span>`;
+}
+
+function barColor(score) {
+  if (score >= 80) return 'var(--green)';
+  if (score >= 60) return 'var(--yellow)';
+  if (score >= 40) return 'var(--orange)';
+  return 'var(--red)';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function checkIcon(got, max) {
+  if (got >= max) return '<span class="ic ok">✓</span>';
+  if (got > 0) return '<span class="ic mid">!</span>';
+  return '<span class="ic bad">×</span>';
+}
+
+function detailHTML(r) {
+  let h = `<div class="fin">Конечный адрес: <span class="link">${esc(r.finalUrl || '')}</span></div><div class="checks">`;
+  for (const c of (r.checks || [])) {
+    h += `<div class="check">${checkIcon(c.got, c.max)}<div>` +
+      `<div class="ct">${esc(c.name)} — <b>+${c.got}</b></div>` +
+      `<div class="cn">${esc(c.note)}</div></div></div>`;
+  }
+  h += '</div>';
+  if ((r.notes || []).length) {
+    h += '<div class="sec-t">Обрати внимание:</div><ul>';
+    for (const n of r.notes) h += `<li class="note-warn">${esc(n)}</li>`;
+    h += '</ul>';
+  }
+  if ((r.info || []).length) {
+    h += '<div class="sec-t">Справочно:</div><ul>';
+    for (const s of r.info) h += `<li class="cn">${esc(s)}</li>`;
+    h += '</ul>';
+  }
+  if ((r.hops || []).length) {
+    h += '<div class="sec-t">Путь ссылки:</div><ul>';
+    for (const x of r.hops) h += `<li class="link">${esc(x)}</li>`;
+    h += '</ul>';
+  }
+  return h;
+}
+
+const HIST_NAMES = { R: 'Редиректы', T: 'Шифрование', S: 'Скорость', H: 'Заголовки', A: 'Возраст', C: 'Чистота' };
+
+function histDetail(h) {
+  let out = '';
+  if (h.detail) {
+    const parts = h.detail.split(' ').map(t => {
+      const m = t.match(/^([A-Z]+)(\d+)$/);
+      if (!m) return null;
+      return `${HIST_NAMES[m[1]] || m[1]} +${m[2]}`;
+    }).filter(Boolean);
+    if (parts.length) out += `<div class="hdet">${esc(parts.join(' · '))}</div>`;
+  }
+  if (h.notes) out += `<div class="hdet note-warn">${esc(h.notes)}</div>`;
+  return out || '<div class="hdet">Без расшифровки (старая запись).</div>';
+}
+
+async function run() {
+  const links = document.getElementById('links').value
+    .split('\n').map(s => s.trim()).filter(s => s && !s.startsWith('#'));
+  if (!links.length) { progress.textContent = 'Вставь хотя бы одну ссылку.'; return; }
+  btn.disabled = true;
+  rows.innerHTML = '';
+  let i = 0;
+  for (const link of links) {
+    i++;
+    progress.textContent = `Проверяю ${i}/${links.length}: ${link} ...`;
+    const tr = document.createElement('tr');
+    tr.className = 'row';
+    tr.innerHTML = `<td>...</td><td>...</td><td class="link">${esc(link)}</td>`;
+    rows.appendChild(tr);
+    try {
+      const res = await fetch('/api/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link })
+      });
+      const r = await res.json();
+      if (r.error) {
+        tr.innerHTML = `<td>—</td><td>${badge('ОШИБКА')}</td><td class="link">${esc(link)} (${esc(r.error)})</td>`;
+      } else {
+        const id = 'd' + Date.now() + i;
+        tr.innerHTML = `<td><b>${r.score}</b><div class="bar"><div style="width:${r.score}%;background:${barColor(r.score)}"></div></div></td>` +
+          `<td>${badge(r.word)}<br><small style="color:var(--muted)">${esc(r.verdict.split(':')[0])}</small></td>` +
+          `<td class="link">${esc(link)}</td>`;
+        const dtr = document.createElement('tr');
+        dtr.className = 'detail';
+        dtr.id = id;
+        dtr.innerHTML = `<td colspan="3">${detailHTML(r, id)}</td>`;
+        dtr.style.display = 'table-row';
+        rows.appendChild(dtr);
+        tr.onclick = () => { dtr.style.display = dtr.style.display === 'table-row' ? 'none' : 'table-row'; };
+      }
+    } catch (e) {
+      tr.innerHTML = `<td>—</td><td>${badge('ОШИБКА')}</td><td class="link">${esc(link)} (нет связи)</td>`;
+    }
+  }
+  progress.textContent = `Готово: ${links.length} шт.`;
+  btn.disabled = false;
+  loadHistory();
+}
+
+async function clearHistory() {
+  if (!confirm('Точно стереть всю историю?')) return;
+  const st = document.getElementById('histStatus');
+  st.textContent = 'Чищу...';
+  try {
+    let res = await fetch('/api/history', { method: 'DELETE' });
+    if (!res.ok) {
+      res = await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear' })
+      });
+    }
+    st.textContent = res.ok ? 'История очищена.' : 'Не вышло очистить, попробуй ещё раз.';
+  } catch (e) {
+    st.textContent = 'Нет связи с программой.';
+  }
+  loadHistory();
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/history');
+    const list = await res.json();
+    const tb = document.getElementById('hist');
+    tb.innerHTML = '';
+    for (const h of list.slice().reverse()) {
+      const tr = document.createElement('tr');
+      tr.className = 'row';
+      tr.innerHTML = `<td style="white-space:nowrap">${esc(h.time || '')}</td>` +
+        `<td><b>${esc(h.score || '')}</b></td><td>${badge(h.word || '')}</td>` +
+        `<td class="link">${esc(h.link || '')}${histDetail(h)}</td>`;
+      tb.appendChild(tr);
+    }
+    if (!list.length) tb.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">Пока пусто — проверь первую ссылку.</td></tr>';
+  } catch (e) { /* молча */ }
+}
+
+loadHistory();
+</script>
+</body>
+</html>
