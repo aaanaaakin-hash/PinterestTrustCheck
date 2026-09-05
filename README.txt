@@ -8,8 +8,9 @@
 Другой способ: впиши ссылки в links.txt и запусти run.bat —
 получишь таблицу и файл results.csv.
 
-Ключ Google (не обязателен): заведи ключ Safe Browsing API на
-console.cloud.google.com и вставь его в файл gsb.key одной строкой.
+Ключ Google (не обязателен, но рекомендуется как страховка):
+заведи ключ Safe Browsing API на console.cloud.google.com
+и вставь его в файл gsb.key одной строкой.
 Подробно — в README.md.
 
 Это наш индекс 0-100, а не внутренняя цифра Pinterest.

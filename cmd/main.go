@@ -593,7 +593,7 @@ func checkOne(link string) result {
 		r.Notes = append(r.Notes, "Google считает ссылку опасной — Pinterest такие режет почти наверняка.")
 	}
 	if loadGSBKey() == "" {
-		r.Info = append(r.Info, "Google: не проверено — нет ключа в gsb.key")
+		r.Info = append(r.Info, "Google: не проверено — рекомендуется ключ (страховка от худшего случая, как получить — в README.md)")
 	} else if gsbHit {
 		r.Info = append(r.Info, "Google: в чёрном списке")
 	} else {
