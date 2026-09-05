@@ -86,9 +86,9 @@
   tr.row:hover td { background: rgba(255,255,255,0.03); }
   .score {
     display: inline-block;
-    padding: 4px 14px;
+    padding: 5px 16px;
     border-radius: 20px;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 700;
     white-space: nowrap;
   }
@@ -111,6 +111,10 @@
   .b-red { background: rgba(248,81,73,0.12); color: var(--red); border: 1px solid var(--red); }
   .b-gray { background: rgba(139,148,158,0.12); color: var(--muted); border: 1px solid var(--muted); }
   .host { font-weight: 700; font-size: 15px; }
+  .h-green { color: var(--green); }
+  .h-yellow { color: var(--yellow); }
+  .h-orange { color: var(--orange); }
+  .h-red { color: var(--red); }
   .link { word-break: break-all; }
   .link-sm { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .detail { display: none; }
@@ -155,7 +159,7 @@
   <div class="panel">
     <div class="flabel">Список ссылок</div>
     <div class="inrow">
-      <textarea id="links" placeholder="Введите ссылки (по одной в строке)&#10;amazon.com&#10;https://example.com/page"></textarea>
+      <textarea id="links" placeholder="Введите ссылки Pinterest (по одной в строке)&#10;amazon.com&#10;https://example.com/page"></textarea>
       <button id="go" onclick="run()">Проверить</button>
     </div>
     <div class="progress" id="progress"></div>
@@ -203,10 +207,10 @@ function esc(s) {
 }
 
 function zoneOf(score) {
-  if (score >= 80) return { cls: 's-green', label: 'Высокое доверие' };
-  if (score >= 60) return { cls: 's-yellow', label: 'Внимание' };
-  if (score >= 40) return { cls: 's-orange', label: 'Повышенный риск' };
-  return { cls: 's-red', label: 'Высокий риск' };
+  if (score >= 80) return { cls: 's-green', hcls: 'h-green', label: 'Высокое доверие' };
+  if (score >= 60) return { cls: 's-yellow', hcls: 'h-yellow', label: 'Внимание' };
+  if (score >= 40) return { cls: 's-orange', hcls: 'h-orange', label: 'Повышенный риск' };
+  return { cls: 's-red', hcls: 'h-red', label: 'Высокий риск' };
 }
 
 function badge(word) {
@@ -232,16 +236,16 @@ function botBad(r) {
 function signalBadges(r) {
   const out = [];
   const ssl = findCheck(r, 'Шифрование');
-  if (ssl.got >= ssl.max) out.push('<span class="badge b-green">SSL в норме</span>');
-  else if (ssl.got > 0) out.push('<span class="badge b-yellow">SSL слабый</span>');
-  else out.push('<span class="badge b-red">SSL: проблема</span>');
+  if (ssl.got >= ssl.max) out.push('<span class="badge b-green">🔒 SSL в норме</span>');
+  else if (ssl.got > 0) out.push('<span class="badge b-yellow">🔒 SSL слабый</span>');
+  else out.push('<span class="badge b-red">🔒 SSL: проблема</span>');
   const n = Math.max(0, (r.hops || []).length - 1);
   const red = findCheck(r, 'Редиректы');
   const rcls = red.got >= 30 ? 'b-green' : (red.got >= 14 ? 'b-yellow' : 'b-red');
-  out.push(`<span class="badge ${rcls}">Редиректы: ${n}</span>`);
+  out.push(`<span class="badge ${rcls}">➔ Редиректы: ${n}</span>`);
   out.push(botBad(r)
-    ? '<span class="badge b-red">Бот: расхождение</span>'
-    : '<span class="badge b-green">Бот: совпадает</span>');
+    ? '<span class="badge b-red">🤖 Бот: расхождение</span>'
+    : '<span class="badge b-green">🤖 Бот: совпадает</span>');
   const info = infoText(r);
   if (info.includes('найден в')) out.push('<span class="badge b-red">Списки: найден</span>');
   else if (info.includes('Списки спама: чисто')) out.push('<span class="badge b-green">Списки: чисто</span>');
@@ -355,7 +359,7 @@ async function run() {
       } else {
         const z = zoneOf(r.score);
         const host = esc(r.host || link);
-        tr.innerHTML = `<td><div class="host">${host}</div><div class="link-sm link">${esc(link)}</div></td>` +
+        tr.innerHTML = `<td><div class="host ${z.hcls}">${host}</div><div class="link-sm link">${esc(link)}</div></td>` +
           `<td><span class="score ${z.cls}">${r.score} ${z.label}</span>${signalBadges(r)}</td>`;
         const dtr = document.createElement('tr');
         dtr.className = 'detail';
