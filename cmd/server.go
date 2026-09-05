@@ -40,13 +40,64 @@ func apiCheck(w http.ResponseWriter, req *http.Request) {
 	_, _ = w.Write(data)
 }
 
-// Ключ из браузера: показать состояние и сохранить новый. Сам ключ наружу не отдаём.
-func apiKey(w http.ResponseWriter, req *http.Request) {
+// Ключи из браузера: состояние всех и сохранение. Сами ключи наружу не отдаём.
+func keyGet(which string) string {
+	switch which {
+	case "otx":
+		return loadOTXKey()
+	case "vt":
+		return loadVTKey()
+	default:
+		return loadGSBKey()
+	}
+}
+
+func keyValidate(which, key string) string {
+	switch which {
+	case "otx":
+		return validateOTXKey(key)
+	case "vt":
+		return validateVTKey(key)
+	default:
+		return validateGSBKey(key)
+	}
+}
+
+func keyFile(which string) string {
+	switch which {
+	case "otx":
+		return "otx.key"
+	case "vt":
+		return "vt.key"
+	default:
+		return "gsb.key"
+	}
+}
+
+func keyStore(which, key string) {
+	switch which {
+	case "otx":
+		otxKey = key
+	case "vt":
+		vtKey = key
+	default:
+		gsbKey = key
+	}
+}
+
+func looksLikeKey(k string) bool {
+	return len(k) >= 10 && !strings.ContainsAny(k, " \t\n")
+}
+
+func apiKeys(w http.ResponseWriter, req *http.Request) {
 	_, dir := linksSpot()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if req.Method == "GET" {
-		set := loadGSBKey() != ""
-		data, _ := json.Marshal(map[string]any{"set": set})
+		data, _ := json.Marshal(map[string]any{
+			"google": keyGet("google") != "",
+			"otx":    keyGet("otx") != "",
+			"vt":     keyGet("vt") != "",
+		})
 		_, _ = w.Write(data)
 		return
 	}
@@ -56,30 +107,36 @@ func apiKey(w http.ResponseWriter, req *http.Request) {
 	}
 	body, _ := io.ReadAll(io.LimitReader(req.Body, 4096))
 	var in struct {
-		Key string `json:"key"`
+		Which string `json:"which"`
+		Key   string `json:"key"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		data, _ := json.Marshal(map[string]any{"ok": false, "error": "не прочитал ключ"})
 		_, _ = w.Write(data)
 		return
 	}
+	if in.Which != "google" && in.Which != "otx" && in.Which != "vt" {
+		data, _ := json.Marshal(map[string]any{"ok": false, "error": "неизвестный ключ"})
+		_, _ = w.Write(data)
+		return
+	}
 	key := strings.TrimSpace(in.Key)
-	if len(key) < 10 || strings.ContainsAny(key, " \t\n") {
+	if !looksLikeKey(key) {
 		data, _ := json.Marshal(map[string]any{"ok": false, "error": "похоже, это не ключ — вставь целиком"})
 		_, _ = w.Write(data)
 		return
 	}
-	if msg := validateGSBKey(key); msg != "" {
+	if msg := keyValidate(in.Which, key); msg != "" {
 		data, _ := json.Marshal(map[string]any{"ok": false, "error": msg})
 		_, _ = w.Write(data)
 		return
 	}
-	if err := os.WriteFile(filepath.Join(dir, "gsb.key"), []byte(key+"\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, keyFile(in.Which)), []byte(key+"\n"), 0600); err != nil {
 		data, _ := json.Marshal(map[string]any{"ok": false, "error": "не записался файл"})
 		_, _ = w.Write(data)
 		return
 	}
-	gsbKey = key
+	keyStore(in.Which, key)
 	data, _ := json.Marshal(map[string]any{"ok": true})
 	_, _ = w.Write(data)
 }
@@ -95,7 +152,7 @@ func serve() {
 		_, _ = io.WriteString(w, pageHTML)
 	})
 	mux.HandleFunc("/api/check", apiCheck)
-	mux.HandleFunc("/api/key", apiKey)
+	mux.HandleFunc("/api/keys", apiKeys)
 	mux.HandleFunc("/api/history", func(w http.ResponseWriter, req *http.Request) {
 		_, dir := linksSpot()
 		clear := req.Method == "DELETE"

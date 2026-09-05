@@ -292,6 +292,49 @@ func gsbQuery(key, pageURL string) (int, bool) {
 	return res.StatusCode, len(out.Matches) > 0
 }
 
+// Проверка чужих ключей безвредными запросами. Пусто — ключ рабочий.
+func validateOTXKey(key string) string {
+	// Общая сводка отдаётся даже без ключа, поэтому проверяем подписками — там без ключа никак.
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", "https://otx.alienvault.com/api/v1/pulses/subscribed?limit=1", nil)
+	req.Header.Set("X-OTX-API-KEY", key)
+	res, err := client.Do(req)
+	if err != nil {
+		return "не вышло связаться — попробуй позже"
+	}
+	defer res.Body.Close()
+	switch res.StatusCode {
+	case 200:
+		return ""
+	case 401, 403:
+		return "сервис ключ отклонил — проверь, что скопировал целиком"
+	default:
+		return "сервис ответил ошибкой — попробуй позже"
+	}
+}
+
+func validateVTKey(key string) string {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", "https://www.virustotal.com/api/v3/domains/example.com", nil)
+	req.Header.Set("x-apikey", key)
+	req.Header.Set("Accept", "application/json")
+	res, err := client.Do(req)
+	if err != nil {
+		return "не вышло связаться — попробуй позже"
+	}
+	defer res.Body.Close()
+	switch res.StatusCode {
+	case 200, 404:
+		return ""
+	case 401, 403:
+		return "сервис ключ отклонил — проверь, что скопировал целиком"
+	case 429:
+		return "лимит исчерпан — попробуй позже"
+	default:
+		return "сервис ответил ошибкой — попробуй позже"
+	}
+}
+
 // Проверка ключа через безвредный адрес. Пусто — ключ рабочий.
 func validateGSBKey(key string) string {
 	status, _ := gsbQuery(key, "https://example.com/")

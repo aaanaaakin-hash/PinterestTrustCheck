@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -408,6 +409,52 @@ func TestCheckOneVT(t *testing.T) {
 	r := checkOne("https://testcheck.local:" + port + "/")
 	if r.Score > 35 {
 		t.Errorf("3 вердикта: балл %d, ждали не больше 35", r.Score)
+	}
+}
+
+func TestLooksLikeKey(t *testing.T) {
+	if !looksLikeKey("AIzaSyAbcdef1234567890") {
+		t.Error("нормальный ключ забраковали")
+	}
+	for _, bad := range []string{"", "short", "has space inside key 123", "tab\there"} {
+		if looksLikeKey(bad) {
+			t.Errorf("мусор %q сошёл за ключ", bad)
+		}
+	}
+}
+
+func TestKeysAPI(t *testing.T) {
+	rec := httptest.NewRecorder()
+	apiKeys(rec, httptest.NewRequest("GET", "/api/keys", nil))
+	var st map[string]bool
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
+		t.Fatalf("статус ключей не JSON: %v", err)
+	}
+	for _, k := range []string{"google", "otx", "vt"} {
+		if _, ok := st[k]; !ok {
+			t.Errorf("нет поля %q в статусе", k)
+		}
+	}
+	bad := func(body string) map[string]any {
+		r := httptest.NewRecorder()
+		apiKeys(r, httptest.NewRequest("POST", "/api/keys", strings.NewReader(body)))
+		var j map[string]any
+		_ = json.Unmarshal(r.Body.Bytes(), &j)
+		return j
+	}
+	if j := bad(`{"which":"nasa","key":"AIzaSyAbcdef1234567890"}`); j["ok"] != false {
+		t.Error("неизвестный ключ приняли")
+	}
+	if j := bad(`{"which":"google","key":"short"}`); j["ok"] != false {
+		t.Error("короткий ключ приняли")
+	}
+	if j := bad(`not json`); j["ok"] != false {
+		t.Error("мусор приняли")
+	}
+	rec2 := httptest.NewRecorder()
+	apiKeys(rec2, httptest.NewRequest("PUT", "/api/keys", nil))
+	if rec2.Code != http.StatusMethodNotAllowed {
+		t.Errorf("PUT: код %d, ждали 405", rec2.Code)
 	}
 }
 

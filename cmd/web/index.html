@@ -166,14 +166,9 @@
   </div>
 
   <div class="panel">
-    <h3 style="margin:0 0 8px;font-size:15px;">Ключ Google <span id="keyState" style="color:var(--muted);font-weight:400;"></span></h3>
-    <div id="keyForm">
-      <div class="hint" style="margin:0 0 8px;">Не обязателен, но рекомендуется как страховка. Вставь ключ — программа сама всё подключит и проверит. Как добыть ключ — в README.md.</div>
-      <input id="keyInput" type="password" placeholder="Вставь ключ сюда">
-      <br>
-      <button onclick="saveKey()">Сохранить ключ</button>
-    </div>
-    <div id="keyDone" class="hint" style="display:none;margin:0;">Google подключён. <a href="#" onclick="showKeyForm();return false;" style="color:var(--accent);">Сменить ключ</a></div>
+    <h3 style="margin:0 0 8px;font-size:15px;">Ключи <span id="keyState" style="color:var(--muted);font-weight:400;"></span></h3>
+    <div class="hint" style="margin:0 0 8px;">Не обязательны, но чем больше подключено — тем тщательнее проверка. Вставь ключ — программа сама всё подключит и проверит. Как добыть — в README.md.</div>
+    <div id="keyRows"></div>
     <div class="progress" id="keyMsg"></div>
   </div>
 
@@ -415,42 +410,63 @@ async function loadHistory() {
   } catch (e) { /* молча */ }
 }
 
+const KEY_DEFS = [
+  { id: 'google', name: 'Google Safe Browsing', desc: 'страховка: чёрный список Google' },
+  { id: 'otx', name: 'OTX', desc: 'жалобы на домен' },
+  { id: 'vt', name: 'VirusTotal', desc: 'вердикты движков' }
+];
+
 async function keyStatus() {
   try {
-    const res = await fetch('/api/key');
+    const res = await fetch('/api/keys');
     const j = await res.json();
-    const has = !!j.set;
-    document.getElementById('keyState').textContent = has ? '— подключён' : '— нет ключа';
-    document.getElementById('keyForm').style.display = has ? 'none' : 'block';
-    document.getElementById('keyDone').style.display = has ? 'block' : 'none';
+    const box = document.getElementById('keyRows');
+    box.innerHTML = '';
+    let n = 0;
+    for (const d of KEY_DEFS) {
+      const has = !!j[d.id] && window._keyEdit !== d.id;
+      if (!!j[d.id] && window._keyEdit !== d.id) n++;
+      const div = document.createElement('div');
+      div.style.margin = '8px 0';
+      div.innerHTML = `<b>${d.name}</b> <span class="hint" style="margin:0">${esc(d.desc)}</span> — ` +
+        (has
+          ? `<span class="ok-t">подключён</span> <a href="#" data-k="${d.id}" class="kchange" style="color:var(--accent);font-size:12px;">сменить</a>`
+          : `<span style="color:var(--muted)">нет ключа</span><br>` +
+            `<span style="display:flex;gap:8px;margin-top:6px;"><input type="password" id="key-${d.id}" placeholder="Вставь ключ" style="flex:1">` +
+            `<button data-k="${d.id}" class="ksave" style="margin-top:0;">Сохранить</button></span>`);
+      box.appendChild(div);
+    }
+    document.getElementById('keyState').textContent = n + '/3 подключено';
+    box.querySelectorAll('.ksave').forEach(b => b.onclick = () => saveKey(b.dataset.k));
+    box.querySelectorAll('.kchange').forEach(a => a.onclick = (e) => { e.preventDefault(); showKeyForm(a.dataset.k); });
   } catch (e) { /* молча */ }
 }
 
-function showKeyForm() {
-  document.getElementById('keyForm').style.display = 'block';
-  document.getElementById('keyDone').style.display = 'none';
+function showKeyForm(which) {
+  window._keyEdit = which;
   document.getElementById('keyMsg').textContent = '';
+  keyStatus();
+  setTimeout(() => {
+    const inp = document.getElementById('key-' + which);
+    if (inp) inp.focus();
+  }, 50);
 }
 
-async function saveKey() {
-  const input = document.getElementById('keyInput');
+async function saveKey(which) {
+  const input = document.getElementById('key-' + which);
   const m = document.getElementById('keyMsg');
   const k = input.value.trim();
   if (!k) { m.textContent = 'Вставь ключ сначала.'; return; }
-  m.textContent = 'Проверяю ключ у Google...';
+  m.textContent = 'Проверяю ключ...';
   try {
-    const res = await fetch('/api/key', {
+    const res = await fetch('/api/keys', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: k })
+      body: JSON.stringify({ which, key: k })
     });
     const j = await res.json();
-    if (j.ok) {
-      m.textContent = 'Ключ сохранён, Google подключён.';
-      input.value = '';
-    } else {
-      m.textContent = 'Не сохранил: ' + (j.error || 'проверь ключ и попробуй снова');
-    }
+    if (j.ok) window._keyEdit = null;
+    m.textContent = j.ok ? 'Ключ сохранён и проверен.' : ('Не сохранил: ' + (j.error || 'проверь ключ и попробуй снова'));
   } catch (e) {
     m.textContent = 'Нет связи с программой.';
   }
