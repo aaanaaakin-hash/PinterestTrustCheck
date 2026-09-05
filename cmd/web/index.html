@@ -157,8 +157,9 @@ const progress = document.getElementById('progress');
 const btn = document.getElementById('go');
 
 function badge(word) {
+  const w = esc(word);
   const cls = { 'ЗЕЛЁНЫЙ': 'b-green', 'ЖЁЛТЫЙ': 'b-yellow', 'ОРАНЖЕВЫЙ': 'b-orange', 'КРАСНЫЙ': 'b-red' }[word] || 'b-red';
-  return `<span class="badge ${cls}">${word}</span>`;
+  return `<span class="badge ${cls}">${w}</span>`;
 }
 
 function barColor(score) {

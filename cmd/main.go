@@ -217,6 +217,7 @@ type fetchOut struct {
 	body    string
 	ms      int64
 	stopped bool
+	guarded bool
 }
 
 // Один запрос без авторедиректов, с лимитом размера и таймаутом.
@@ -265,7 +266,13 @@ func fetchChain(start, ua string) fetchOut {
 				return out
 			}
 			base, _ := url.Parse(cur)
-			cur = base.ResolveReference(next).String()
+			target := base.ResolveReference(next).String()
+			// Переброс на другой хост проверяем: внутрь закрытой сети не ходим.
+			if hostOf(target) != hostOf(cur) && hostIsPrivate(hostOf(target)) {
+				out.guarded = true
+				return out
+			}
+			cur = target
 			continue
 		}
 		return out
@@ -453,6 +460,8 @@ func checkOne(link string) result {
 			}
 		}
 		switch {
+		case f.guarded:
+			r.Checks = append(r.Checks, checkPart{Name: "Редиректы", Got: 0, Max: 30, Note: "переброс ведёт внутрь закрытой сети — дальше не пошли (защита)"})
 		case f.stopped:
 			r.Checks = append(r.Checks, checkPart{Name: "Редиректы", Got: 0, Max: 30, Note: fmt.Sprintf("больше %d прыжков — Pinterest такое режет", maxRedirects)})
 		case count == 0:
@@ -1182,9 +1191,36 @@ func apiCheck(w http.ResponseWriter, req *http.Request) {
 // Адрес страницы: обычно стандартный, но порт можно сменить переменной PINTEREST_PORT.
 func serveAddr() string {
 	if p := strings.TrimSpace(os.Getenv("PINTEREST_PORT")); p != "" {
-		return "127.0.0.1:" + p
+		ok := len(p) >= 2 && len(p) <= 5
+		for _, c := range p {
+			if c < '0' || c > '9' {
+				ok = false
+			}
+		}
+		if ok {
+			return "127.0.0.1:" + p
+		}
 	}
 	return defServeAddr
+}
+
+// Хост ведёт внутрь закрытой сети? Чужой сайт мог подсунуть такой переброс.
+func hostIsPrivate(host string) bool {
+	if ip := net.ParseIP(host); ip != nil {
+		return isPrivateIP(ip)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(addrs) == 0 {
+		return true
+	}
+	for _, a := range addrs {
+		if !isPrivateIP(a.IP) {
+			return false
+		}
+	}
+	return true
 }
 
 // Интерфейс в браузере: только этот компьютер, наружу ничего не торчит.
