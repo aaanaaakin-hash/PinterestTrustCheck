@@ -22,9 +22,11 @@ func stubEnv(t *testing.T) {
 	t.Helper()
 	oldResolve, oldAge, oldGSB, oldLists, oldHosting, oldTLS, oldSkip, oldClient :=
 		resolveFn, ageFn, gsbFn, listsFn, hostingFn, tlsFn, tlsSkipVerify, newScanClient
+	oldWayback, oldCrt, oldOtx, oldVt := waybackFn, crtFn, otxFn, vtFn
 	t.Cleanup(func() {
 		resolveFn, ageFn, gsbFn, listsFn, hostingFn, tlsFn, tlsSkipVerify, newScanClient =
 			oldResolve, oldAge, oldGSB, oldLists, oldHosting, oldTLS, oldSkip, oldClient
+		waybackFn, crtFn, otxFn, vtFn = oldWayback, oldCrt, oldOtx, oldVt
 	})
 	m30 := 30
 	resolveFn = func(string) (string, error) { return "127.0.0.1", nil }
@@ -33,6 +35,10 @@ func stubEnv(t *testing.T) {
 	listsFn = func(string, string) ([]string, bool) { return nil, false }
 	hostingFn = func(string) string { return "тест" }
 	tlsFn = func(string) tlsOut { return tlsOut{ok: true, protocol: "TLSv1.3", daysLeft: 400} }
+	waybackFn = func(string) archiveInfo { return archiveInfo{} }
+	crtFn = func(string) certInfo { return certInfo{} }
+	otxFn = func(string) (int, string) { return 0, "no-key" }
+	vtFn = func(string) (int, int, int, string) { return 0, 0, 0, "no-key" }
 	tlsSkipVerify = true
 }
 
@@ -319,6 +325,89 @@ func TestCheckOneHalfYearCap(t *testing.T) {
 	}
 	if r.Score < 60 {
 		t.Errorf("домену 8 мес.: балл %d, ждали жёлтую зону", r.Score)
+	}
+}
+
+func TestParseURIBL(t *testing.T) {
+	for _, ip := range []string{"127.0.0.2", "127.0.0.4", "127.0.0.8", "127.0.0.14"} {
+		if hit, _ := parseURIBL(ip); !hit {
+			t.Errorf("parseURIBL(%s): ждали hit", ip)
+		}
+	}
+	for _, ip := range []string{"127.0.0.1", "127.0.0.255"} {
+		if hit, refused := parseURIBL(ip); hit || !refused {
+			t.Errorf("parseURIBL(%s): ждали отказ", ip)
+		}
+	}
+	if hit, refused := parseURIBL("1.2.3.4"); hit || refused {
+		t.Error("чужой адрес сочли ответом")
+	}
+}
+
+func TestCheckOneDropped(t *testing.T) {
+	stubEnv(t)
+	m120 := 120
+	oldAge := ageFn
+	ageFn = func(string) *int { return &m120 }
+	defer func() { ageFn = oldAge }()
+	oldWayback := waybackFn
+	waybackFn = func(string) archiveInfo { return archiveInfo{first: "2026-01-05", months: 5, total: 12, ok: true} }
+	defer func() { waybackFn = oldWayback }()
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(goodPage))
+	}))
+	defer ts.Close()
+	port := testPort(ts)
+	newScanClient = func() *http.Client { return testClient(port) }
+
+	r := checkOne("https://testcheck.local:" + port + "/")
+	if r.Score > 59 {
+		t.Errorf("перекупленный: балл %d, ждали не больше 59", r.Score)
+	}
+	found := false
+	for _, n := range r.Notes {
+		if strings.Contains(n, "перекупался") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("нет пометки про перекупку: %v", r.Notes)
+	}
+}
+
+func TestCheckOneOTX(t *testing.T) {
+	stubEnv(t)
+	oldOtx := otxFn
+	otxFn = func(string) (int, string) { return 7, "ok" }
+	defer func() { otxFn = oldOtx }()
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(goodPage))
+	}))
+	defer ts.Close()
+	port := testPort(ts)
+	newScanClient = func() *http.Client { return testClient(port) }
+
+	r := checkOne("https://testcheck.local:" + port + "/")
+	if r.Score > 59 {
+		t.Errorf("7 жалоб: балл %d, ждали не больше 59", r.Score)
+	}
+}
+
+func TestCheckOneVT(t *testing.T) {
+	stubEnv(t)
+	oldVt := vtFn
+	vtFn = func(string) (int, int, int, string) { return 3, 0, 90, "ok" }
+	defer func() { vtFn = oldVt }()
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(goodPage))
+	}))
+	defer ts.Close()
+	port := testPort(ts)
+	newScanClient = func() *http.Client { return testClient(port) }
+
+	r := checkOne("https://testcheck.local:" + port + "/")
+	if r.Score > 35 {
+		t.Errorf("3 вердикта: балл %d, ждали не больше 35", r.Score)
 	}
 }
 

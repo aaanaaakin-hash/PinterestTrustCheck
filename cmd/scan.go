@@ -46,6 +46,10 @@ var (
 	gsbFn         = gsbListed
 	hostingFn     = hostingInfo
 	listsFn       = listsOf
+	waybackFn     = waybackFirst
+	crtFn         = crtFirst
+	otxFn         = otxPulses
+	vtFn          = vtStats
 	newScanClient = func() *http.Client {
 		return &http.Client{
 			Timeout: timeoutMs * time.Millisecond,
@@ -397,13 +401,44 @@ func urlhausListed(pageURL string) bool {
 // Следы страниц доверия: контакты, политика. Их любит Pinterest.
 var reTrust = regexp.MustCompile(`(?i)(privacy|confiden|policy|terms|contact|kontakt|about|imprint|оферт|конфиденц|контакт|связаться)`)
 
-// Проверка по трём чёрным спискам сразу. Возвращает имена сработавших и был ли отказ.
+// Разбор ответа URIBL: биты 2/4/8 — списки, 1 — отказ в обслуживании.
+func parseURIBL(ip string) (hit, refused bool) {
+	switch ip {
+	case "127.0.0.2", "127.0.0.4", "127.0.0.8", "127.0.0.14":
+		return true, false
+	case "127.0.0.1", "127.0.0.255":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+// Чёрный список URIBL через DNS (для личного пользования бесплатно).
+func uriblListed(host string) (bool, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host+".multi.uribl.com")
+	if err != nil || len(addrs) == 0 {
+		return false, false
+	}
+	hit, refused := false, false
+	for _, a := range addrs {
+		if h, r := parseURIBL(a.IP.String()); h {
+			hit = true
+		} else if r {
+			refused = true
+		}
+	}
+	return hit, refused && !hit
+}
+
+// Проверка по четырём чёрным спискам сразу. Возвращает имена сработавших и был ли отказ.
 func listsOf(host, finalURL string) (bad []string, refused bool) {
 	type listHit struct {
 		name string
 		hit  bool
 	}
-	listCh := make(chan listHit, 3)
+	listCh := make(chan listHit, 4)
 	go func() {
 		hit, no := dblListed(host)
 		if no {
@@ -413,12 +448,211 @@ func listsOf(host, finalURL string) (bad []string, refused bool) {
 	}()
 	go func() { listCh <- listHit{"SURBL", surblListed(host)} }()
 	go func() { listCh <- listHit{"URLhaus", urlhausListed(finalURL)} }()
-	for i := 0; i < 3; i++ {
+	go func() {
+		hit, no := uriblListed(host)
+		if no {
+			refused = true
+		}
+		listCh <- listHit{"URIBL", hit}
+	}()
+	for i := 0; i < 4; i++ {
 		if h := <-listCh; h.hit {
 			bad = append(bad, h.name)
 		}
 	}
 	return bad, refused
+}
+
+// Прошлое домена в веб-архиве: первый снимок и сколько их.
+type archiveInfo struct {
+	first  string
+	months int
+	total  int
+	ok     bool
+}
+
+func waybackFirst(host string) archiveInfo {
+	// Без фильтров на их стороне и маленькими порциями: архив отвечает медленно.
+	u := "https://web.archive.org/cdx/search/cdx?url=" + url.QueryEscape(host) +
+		"&output=json&fl=timestamp,original&limit=5"
+	client := &http.Client{Timeout: 25 * time.Second}
+	req, _ := http.NewRequest("GET", u, nil)
+	req.Header.Set("User-Agent", uaBrowser)
+	res, err := client.Do(req)
+	if err != nil {
+		return archiveInfo{}
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 500000))
+	if err != nil {
+		return archiveInfo{}
+	}
+	var rows [][]string
+	if err := json.Unmarshal(raw, &rows); err != nil || len(rows) == 0 {
+		return archiveInfo{}
+	}
+	best := ""
+	total := 0
+	for _, row := range rows {
+		if len(row) == 0 || len(row[0]) != 14 || row[0] == "timestamp" {
+			continue
+		}
+		total++
+		if best == "" || row[0] < best {
+			best = row[0]
+		}
+	}
+	if best == "" {
+		return archiveInfo{}
+	}
+	t, err := time.Parse("20060102150405", best)
+	if err != nil {
+		return archiveInfo{}
+	}
+	m := int(time.Since(t).Hours() / 730)
+	return archiveInfo{first: t.Format("2006-01-02"), months: m, total: total, ok: true}
+}
+
+// История сертификатов: первый и сколько их.
+type certInfo struct {
+	first  string
+	months int
+	count  int
+	ok     bool
+}
+
+func crtFirst(host string) certInfo {
+	// Сначала точное имя (ответ маленький), потом все поддомены.
+	if ci := crtQuery("https://crt.sh/?q=" + url.QueryEscape(host) + "&output=json"); ci.ok {
+		return ci
+	}
+	return crtQuery("https://crt.sh/?q=%25." + url.QueryEscape(host) + "&output=json")
+}
+
+func crtQuery(u string) certInfo {
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, _ := http.NewRequest("GET", u, nil)
+	req.Header.Set("User-Agent", uaBrowser)
+	res, err := client.Do(req)
+	if err != nil {
+		return certInfo{}
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 5000000))
+	if err != nil {
+		return certInfo{}
+	}
+	var rows []struct {
+		NotBefore string `json:"not_before"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil || len(rows) == 0 {
+		return certInfo{}
+	}
+	best := ""
+	for _, row := range rows {
+		d := row.NotBefore
+		if len(d) < 10 {
+			continue
+		}
+		if best == "" || d < best {
+			best = d
+		}
+	}
+	if best == "" {
+		return certInfo{}
+	}
+	t, err := time.Parse("2006-01-02T15:04:05", best[:19])
+	if err != nil {
+		return certInfo{}
+	}
+	return certInfo{first: t.Format("2006-01-02"), months: int(time.Since(t).Hours() / 730), count: len(rows), ok: true}
+}
+
+// Жалобы на домен в OTX. Статус: ok, no-key, bad-key, fail.
+func otxPulses(host string) (int, string) {
+	key := loadOTXKey()
+	if key == "" {
+		return 0, "no-key"
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", "https://otx.alienvault.com/api/v1/indicators/domain/"+url.PathEscape(host)+"/general", nil)
+	req.Header.Set("X-OTX-API-KEY", key)
+	res, err := client.Do(req)
+	if err != nil {
+		return 0, "fail"
+	}
+	defer res.Body.Close()
+	if res.StatusCode == 401 || res.StatusCode == 403 {
+		return 0, "bad-key"
+	}
+	if res.StatusCode == 404 {
+		return 0, "ok"
+	}
+	if res.StatusCode != 200 {
+		return 0, "fail"
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 200000))
+	if err != nil {
+		return 0, "fail"
+	}
+	var doc struct {
+		PulseInfo struct {
+			Count int `json:"count"`
+		} `json:"pulse_info"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return 0, "fail"
+	}
+	return doc.PulseInfo.Count, "ok"
+}
+
+// Вердикт VirusTotal по домену. Статус: ok, no-key, bad-key, limited, fail.
+func vtStats(host string) (malicious, suspicious, total int, status string) {
+	key := loadVTKey()
+	if key == "" {
+		return 0, 0, 0, "no-key"
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", "https://www.virustotal.com/api/v3/domains/"+url.PathEscape(host), nil)
+	req.Header.Set("x-apikey", key)
+	req.Header.Set("Accept", "application/json")
+	res, err := client.Do(req)
+	if err != nil {
+		return 0, 0, 0, "fail"
+	}
+	defer res.Body.Close()
+	switch res.StatusCode {
+	case 401, 403:
+		return 0, 0, 0, "bad-key"
+	case 404:
+		return 0, 0, 0, "unknown"
+	case 429:
+		return 0, 0, 0, "limited"
+	}
+	if res.StatusCode != 200 {
+		return 0, 0, 0, "fail"
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 300000))
+	if err != nil {
+		return 0, 0, 0, "fail"
+	}
+	var doc struct {
+		Data struct {
+			Attributes struct {
+				Stats struct {
+					Malicious  int `json:"malicious"`
+					Suspicious int `json:"suspicious"`
+					Harmless   int `json:"harmless"`
+					Undetected int `json:"undetected"`
+				} `json:"last_analysis_stats"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return 0, 0, 0, "fail"
+	}
+	s := doc.Data.Attributes.Stats
+	return s.Malicious, s.Suspicious, s.Malicious + s.Suspicious + s.Harmless + s.Undetected, "ok"
 }
 
 // Полная проверка одной ссылки.
@@ -545,7 +779,8 @@ func checkOne(link string) check.Result {
 
 	// Возраст. Молодым доменам режем потолок: зелёный надо заслужить годами.
 	ageCap := -1
-	if months := ageFn(host); months == nil {
+	ageMonths := ageFn(host)
+	if months := ageMonths; months == nil {
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 5, Max: 15, Note: "возраст узнать не вышло — считаем с опаской"})
 	} else if *months >= 24 {
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 15, Max: 15, Note: fmt.Sprintf("домену ~%d г. — старый, это плюс", *months/12)})
@@ -627,7 +862,92 @@ func checkOne(link string) check.Result {
 		r.Notes = append(r.Notes, "Домен в чёрных списках спама: "+strings.Join(badLists, ", ")+". Pinterest такое режет.")
 		r.Info = append(r.Info, "Списки спама: найден в "+strings.Join(badLists, ", "))
 	} else {
-		r.Info = append(r.Info, "Списки спама: чисто (Spamhaus, SURBL, URLhaus)")
+		r.Info = append(r.Info, "Списки спама: чисто (Spamhaus, SURBL, URLhaus, URIBL)")
+	}
+	// Прошлое домена: архив, сертификаты, жалобы, вердикты. Спрашиваем разом.
+	type repOut struct {
+		wb       archiveInfo
+		ci       certInfo
+		otxN     int
+		otxSt    string
+		vtM      int
+		vtS      int
+		vtTot    int
+		vtSt     string
+	}
+	repCh := make(chan repOut, 1)
+	go func() {
+		var o repOut
+		done := make(chan struct{}, 4)
+		go func() { o.wb = waybackFn(host); done <- struct{}{} }()
+		go func() { o.ci = crtFn(host); done <- struct{}{} }()
+		go func() { o.otxN, o.otxSt = otxFn(host); done <- struct{}{} }()
+		go func() { o.vtM, o.vtS, o.vtTot, o.vtSt = vtFn(host); done <- struct{}{} }()
+		for i := 0; i < 4; i++ {
+			<-done
+		}
+		repCh <- o
+	}()
+	rep := <-repCh
+	if rep.wb.ok {
+		r.Info = append(r.Info, fmt.Sprintf("Архив: первый снимок %s", rep.wb.first))
+		// Паспорт говорит «старый», а в архиве его почти нет — похоже, перекупался.
+		if ageMonths != nil && *ageMonths >= 24 && rep.wb.months < 12 {
+			penalty += 10
+			caps = append(caps, 59)
+			r.Notes = append(r.Notes, fmt.Sprintf("Паспорт говорит, что домену ~%d г., а в архиве он виден меньше года — похоже, домен перекупался. Такие Pinterest не любит.", *ageMonths/12))
+		}
+	} else {
+		r.Info = append(r.Info, "Архив: снимков не нашли")
+	}
+	if rep.ci.ok {
+		r.Info = append(r.Info, fmt.Sprintf("Сертификаты: первый %s (всего %d)", rep.ci.first, rep.ci.count))
+	} else {
+		r.Info = append(r.Info, "Сертификаты: историю глянуть не вышло")
+	}
+	switch rep.otxSt {
+	case "no-key":
+		r.Info = append(r.Info, "OTX: нет ключа (otx.key) — жалобы не проверены")
+	case "bad-key":
+		r.Info = append(r.Info, "OTX: ключ не подошёл")
+	case "fail":
+		r.Info = append(r.Info, "OTX: спросить не вышло")
+	default:
+		if rep.otxN > 0 {
+			penalty += 10
+			r.Notes = append(r.Notes, fmt.Sprintf("На домен %d жалоб в базе OTX — его уже светили в угрозах.", rep.otxN))
+			r.Info = append(r.Info, fmt.Sprintf("OTX: жалоб %d", rep.otxN))
+			if rep.otxN >= 5 {
+				caps = append(caps, 59)
+			}
+		} else {
+			r.Info = append(r.Info, "OTX: жалоб нет")
+		}
+	}
+	switch rep.vtSt {
+	case "no-key":
+		r.Info = append(r.Info, "VirusTotal: нет ключа (vt.key) — вердикты не проверены")
+	case "bad-key":
+		r.Info = append(r.Info, "VirusTotal: ключ не подошёл")
+	case "limited":
+		r.Info = append(r.Info, "VirusTotal: лимит исчерпан, пропускаем")
+	case "unknown":
+		r.Info = append(r.Info, "VirusTotal: домен им неизвестен")
+	case "fail":
+		r.Info = append(r.Info, "VirusTotal: спросить не вышло")
+	default:
+		if rep.vtM > 0 {
+			penalty += 15
+			caps = append(caps, 35)
+			r.Notes = append(r.Notes, fmt.Sprintf("VirusTotal: %d движков считают домен вредоносным.", rep.vtM))
+			r.Info = append(r.Info, fmt.Sprintf("VirusTotal: вредоносный (%d движков)", rep.vtM))
+		} else if rep.vtS > 0 {
+			penalty += 8
+			r.Notes = append(r.Notes, fmt.Sprintf("VirusTotal: %d движков считают домен подозрительным.", rep.vtS))
+			r.Info = append(r.Info, fmt.Sprintf("VirusTotal: подозрительный (%d движков)", rep.vtS))
+		} else {
+			r.Info = append(r.Info, fmt.Sprintf("VirusTotal: чисто (движков: %d)", rep.vtTot))
+		}
 	}
 	// Страницы доверия: контакты, политика. Их отсутствие Pinterest не любит.
 	if len(f.hops) > 0 && f.hops[len(f.hops)-1].status == 200 && len(f.body) > 500 {

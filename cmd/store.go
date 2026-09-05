@@ -12,31 +12,53 @@ import (
 	"trustcheck/internal/check"
 )
 
-// Ключ Google Safe Browsing: переменная окружения или файл gsb.key.
-// Читаем один раз. Нет ключа — тихо пропускаем проверку.
+// Ключ: переменная окружения или файл рядом с кнопками / программой.
+// Строки с # — подсказки, не ключ.
+func readKeyFile(name, env string) string {
+	if k := strings.TrimSpace(os.Getenv(env)); k != "" {
+		return k
+	}
+	paths := []string{name}
+	if ex, err := os.Executable(); err == nil {
+		paths = append(paths, filepath.Join(filepath.Dir(ex), name))
+	}
+	for _, p := range paths {
+		if data, err := os.ReadFile(p); err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				if k := strings.TrimSpace(line); k != "" && !strings.HasPrefix(k, "#") {
+					return k
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// Ключ Google Safe Browsing. Нет ключа — тихо пропускаем проверку.
 var gsbOnce sync.Once
 var gsbKey string
 
 func loadGSBKey() string {
-	gsbOnce.Do(func() {
-		if k := strings.TrimSpace(os.Getenv("PINTEREST_GSB_KEY")); k != "" {
-			gsbKey = k
-			return
-		}
-		paths := []string{"gsb.key"}
-		if ex, err := os.Executable(); err == nil {
-			paths = append(paths, filepath.Join(filepath.Dir(ex), "gsb.key"))
-		}
-		for _, p := range paths {
-			if data, err := os.ReadFile(p); err == nil {
-				if k := strings.TrimSpace(string(data)); k != "" && !strings.HasPrefix(k, "#") {
-					gsbKey = k
-					return
-				}
-			}
-		}
-	})
+	gsbOnce.Do(func() { gsbKey = readKeyFile("gsb.key", "PINTEREST_GSB_KEY") })
 	return gsbKey
+}
+
+// Ключ OTX (жалобы на домен). Нет ключа — тихо пропускаем.
+var otxOnce sync.Once
+var otxKey string
+
+func loadOTXKey() string {
+	otxOnce.Do(func() { otxKey = readKeyFile("otx.key", "PINTEREST_OTX_KEY") })
+	return otxKey
+}
+
+// Ключ VirusTotal. Нет ключа — тихо пропускаем.
+var vtOnce sync.Once
+var vtKey string
+
+func loadVTKey() string {
+	vtOnce.Do(func() { vtKey = readKeyFile("vt.key", "PINTEREST_VT_KEY") })
+	return vtKey
 }
 
 // Дописывает итог в историю. Файл не растёт бесконечно — держим хвост.
@@ -154,16 +176,26 @@ func loadLinks(path string) []string {
 	return out
 }
 
-// Если файла gsb.key нет — создаём образец с подсказкой. Строки с # не считаются ключом.
+// Если файлов ключей нет — создаём образцы с подсказкой. Строки с # не считаются ключом.
 func ensureKeyTemplate(dir string) {
-	p := filepath.Join(dir, "gsb.key")
-	if _, err := os.Stat(p); err == nil {
-		return
+	templates := map[string]string{
+		"gsb.key": "# Ключ Google Safe Browsing (не обязателен, без него программа работает).\n" +
+			"# Как получить: console.cloud.google.com → проект → Safe Browsing API → Включить →\n" +
+			"# Учётные данные → Создать → Ключ API. Вставь ключ вместо этой строки одной строкой.\n",
+		"otx.key": "# Ключ OTX — жалобы на домен (не обязателен).\n" +
+			"# Как получить: регистрация на otx.alienvault.com → настройки → API Integration.\n" +
+			"# Вставь ключ вместо этой строки одной строкой.\n",
+		"vt.key": "# Ключ VirusTotal — вердикты движков (не обязателен).\n" +
+			"# Как получить: регистрация на virustotal.com → значок профиля → API key.\n" +
+			"# Вставь ключ вместо этой строки одной строкой.\n",
 	}
-	text := "# Ключ Google Safe Browsing (не обязателен, без него программа работает).\n" +
-		"# Как получить: console.cloud.google.com → проект → Safe Browsing API → Включить →\n" +
-		"# Учётные данные → Создать → Ключ API. Вставь ключ вместо этой строки одной строкой.\n"
-	_ = os.WriteFile(p, []byte(text), 0644)
+	for name, text := range templates {
+		p := filepath.Join(dir, name)
+		if _, err := os.Stat(p); err == nil {
+			continue
+		}
+		_ = os.WriteFile(p, []byte(text), 0644)
+	}
 }
 
 // Пишет итоги в results.csv рядом с программой.
