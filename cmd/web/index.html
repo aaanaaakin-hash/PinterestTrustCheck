@@ -8,6 +8,7 @@
   :root {
     --bg: #0d1117;
     --panel: #161b22;
+    --panel2: #1c2128;
     --border: #30363d;
     --text: #e6edf3;
     --muted: #8b949e;
@@ -26,8 +27,15 @@
     padding: 24px;
   }
   .wrap { max-width: 980px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; }
+  .ver { color: var(--muted); font-size: 14px; font-weight: 400; }
+  .live {
+    font-size: 12px; font-weight: 700; color: var(--green);
+    background: rgba(63,185,80,0.15); border: 1px solid var(--green);
+    border-radius: 6px; padding: 3px 10px;
+  }
+  .sub { color: var(--muted); font-size: 13px; margin: 6px 0 16px; }
   .panel {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -35,6 +43,10 @@
     padding: 16px;
     margin-bottom: 16px;
   }
+  .inrow { display: flex; gap: 12px; align-items: stretch; }
+  .inrow textarea { flex: 1; }
+  .inrow button { margin-top: 0; white-space: nowrap; }
+  .flabel { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
   textarea {
     width: 100%;
     min-height: 110px;
@@ -72,27 +84,49 @@
   th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
   tr.row { cursor: pointer; }
   tr.row:hover td { background: rgba(255,255,255,0.03); }
+  .score {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .s-green { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid var(--green); box-shadow: 0 0 12px rgba(63,185,80,0.35); }
+  .s-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid var(--yellow); box-shadow: 0 0 12px rgba(210,153,34,0.3); }
+  .s-orange { background: rgba(219,109,40,0.15); color: var(--orange); border: 1px solid var(--orange); box-shadow: 0 0 12px rgba(219,109,40,0.3); }
+  .s-red { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid var(--red); box-shadow: 0 0 12px rgba(248,81,73,0.35); }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .badge {
     display: inline-block;
     padding: 2px 10px;
     border-radius: 20px;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     white-space: nowrap;
   }
-  .b-green { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid var(--green); }
-  .b-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid var(--yellow); }
-  .b-orange { background: rgba(219,109,40,0.15); color: var(--orange); border: 1px solid var(--orange); }
-  .b-red { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid var(--red); }
-  .bar { height: 8px; background: #21262d; border-radius: 4px; margin-top: 6px; min-width: 90px; }
-  .bar > div { height: 100%; border-radius: 4px; }
+  .b-green { background: rgba(63,185,80,0.12); color: var(--green); border: 1px solid var(--green); }
+  .b-yellow { background: rgba(210,153,34,0.12); color: var(--yellow); border: 1px solid var(--yellow); }
+  .b-orange { background: rgba(219,109,40,0.12); color: var(--orange); border: 1px solid var(--orange); }
+  .b-red { background: rgba(248,81,73,0.12); color: var(--red); border: 1px solid var(--red); }
+  .b-gray { background: rgba(139,148,158,0.12); color: var(--muted); border: 1px solid var(--muted); }
+  .host { font-weight: 700; font-size: 15px; }
   .link { word-break: break-all; }
+  .link-sm { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .detail { display: none; }
   .detail td { background: rgba(255,255,255,0.02); font-size: 13px; }
   .detail ul { margin: 6px 0; padding-left: 20px; }
   .detail li { margin-bottom: 3px; }
   .note-warn { color: var(--orange); }
   .hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  .audit {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 10px 0;
+  }
+  .audit-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 14px; }
   .fin { font-size: 13px; margin-bottom: 10px; }
   .checks { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
   .check { display: flex; gap: 10px; align-items: flex-start; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
@@ -105,17 +139,25 @@
   .cn { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .sec-t { font-size: 13px; font-weight: 700; margin: 10px 0 4px; }
   .hdet { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .ok-t { color: var(--green); }
+  .bad-t { color: var(--red); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Проверка доверия Pinterest</h1>
-  <div class="sub">Вставь ссылки, по одной на строку. Это наш индекс 0–100, а не внутренняя цифра Pinterest. <span id="ver"></span></div>
+  <div class="head">
+    <h1>Проверка доверия Pinterest</h1>
+    <span class="ver" id="ver"></span>
+    <span class="live">Активно</span>
+  </div>
+  <div class="sub">Вставь ссылки, по одной на строку. Это наш индекс 0–100, а не внутренняя цифра Pinterest.</div>
 
   <div class="panel">
-    <textarea id="links" placeholder="amazon.com&#10;https://example.com/page&#10;sites.google.com"></textarea>
-    <br>
-    <button id="go" onclick="run()">Проверить</button>
+    <div class="flabel">Список ссылок</div>
+    <div class="inrow">
+      <textarea id="links" placeholder="Введите ссылки (по одной в строке)&#10;amazon.com&#10;https://example.com/page"></textarea>
+      <button id="go" onclick="run()">Проверить</button>
+    </div>
     <div class="progress" id="progress"></div>
   </div>
 
@@ -133,10 +175,10 @@
 
   <div class="panel">
     <table>
-      <thead><tr><th>Балл</th><th>Статус</th><th>Ссылка</th></tr></thead>
+      <thead><tr><th>Домен</th><th>Оценка</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
-    <div class="hint">Вся проверка расписана прямо под каждой строкой: баллы по пунктам, путь ссылки, предупреждения. Нажми на строку, чтобы свернуть. Зелёный 80+ — спокойно, жёлтый 60+ — следи за показами, оранжевый и красный — готовь запасной домен.</div>
+    <div class="hint">Всё расписано прямо под каждой строкой. Нажми на строку, чтобы свернуть. Зелёный 80+ — спокойно, жёлтый 60+ — следи за показами, оранжевый и красный — готовь запасной домен.</div>
   </div>
 
   <div class="panel">
@@ -156,21 +198,85 @@ const rows = document.getElementById('rows');
 const progress = document.getElementById('progress');
 const btn = document.getElementById('go');
 
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function zoneOf(score) {
+  if (score >= 80) return { cls: 's-green', label: 'Высокое доверие' };
+  if (score >= 60) return { cls: 's-yellow', label: 'Внимание' };
+  if (score >= 40) return { cls: 's-orange', label: 'Повышенный риск' };
+  return { cls: 's-red', label: 'Высокий риск' };
+}
+
 function badge(word) {
   const w = esc(word);
   const cls = { 'ЗЕЛЁНЫЙ': 'b-green', 'ЖЁЛТЫЙ': 'b-yellow', 'ОРАНЖЕВЫЙ': 'b-orange', 'КРАСНЫЙ': 'b-red' }[word] || 'b-red';
   return `<span class="badge ${cls}">${w}</span>`;
 }
 
-function barColor(score) {
-  if (score >= 80) return 'var(--green)';
-  if (score >= 60) return 'var(--yellow)';
-  if (score >= 40) return 'var(--orange)';
-  return 'var(--red)';
+function findCheck(r, name) {
+  return (r.checks || []).find(c => c.name === name) || { got: 0, max: 1, note: '' };
 }
 
-function esc(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function infoText(r) {
+  return (r.info || []).join('\n');
+}
+
+function botBad(r) {
+  const t = (r.notes || []).join(' ');
+  return t.includes('маскировк') || t.includes('а боту');
+}
+
+// Плашки сигналов как на картинке: SSL, редиректы, бот, списки, Google.
+function signalBadges(r) {
+  const out = [];
+  const ssl = findCheck(r, 'Шифрование');
+  if (ssl.got >= ssl.max) out.push('<span class="badge b-green">SSL в норме</span>');
+  else if (ssl.got > 0) out.push('<span class="badge b-yellow">SSL слабый</span>');
+  else out.push('<span class="badge b-red">SSL: проблема</span>');
+  const n = Math.max(0, (r.hops || []).length - 1);
+  const red = findCheck(r, 'Редиректы');
+  const rcls = red.got >= 30 ? 'b-green' : (red.got >= 14 ? 'b-yellow' : 'b-red');
+  out.push(`<span class="badge ${rcls}">Редиректы: ${n}</span>`);
+  out.push(botBad(r)
+    ? '<span class="badge b-red">Бот: расхождение</span>'
+    : '<span class="badge b-green">Бот: совпадает</span>');
+  const info = infoText(r);
+  if (info.includes('найден в')) out.push('<span class="badge b-red">Списки: найден</span>');
+  else if (info.includes('Списки спама: чисто')) out.push('<span class="badge b-green">Списки: чисто</span>');
+  else out.push('<span class="badge b-gray">Списки: —</span>');
+  if (info.includes('чёрном списке')) out.push('<span class="badge b-red">Google: в списке</span>');
+  else if (info.includes('Google: чисто')) out.push('<span class="badge b-green">Google: чисто</span>');
+  else out.push('<span class="badge b-gray">Google: нет ключа</span>');
+  return `<div class="badges">${out.join('')}</div>`;
+}
+
+function auditIcon(ok) {
+  return ok ? '<span class="ic ok">✓</span>' : '<span class="ic bad">×</span>';
+}
+
+// Карточка аудита: четыре строки как на картинке.
+function auditCard(r) {
+  const ssl = findCheck(r, 'Шифрование');
+  const sslOk = ssl.got >= ssl.max;
+  const sslTxt = sslOk ? 'активен' : (ssl.got > 0 ? 'слабый' : 'проблема');
+  const botOk = !botBad(r);
+  const info = infoText(r);
+  const listsOk = info.includes('Списки спама: чисто');
+  const listsTxt = listsOk ? 'чисто' : (info.includes('найден в') ? 'найден' : '—');
+  let gsbTxt = 'нет ключа', gsbOk = true, gsbCls = '';
+  if (info.includes('чёрном списке')) { gsbTxt = 'в списке'; gsbOk = false; }
+  else if (info.includes('Google: чисто')) { gsbTxt = 'чисто'; gsbOk = true; }
+  else { gsbCls = 'cn'; }
+  const row = (ok, label, val, valCls) =>
+    `<div class="audit-row">${auditIcon(ok)}<div>${esc(label)}: <b class="${valCls || (ok ? 'ok-t' : 'bad-t')}">${esc(val)}</b></div></div>`;
+  return `<div class="audit">` +
+    row(sslOk, 'Сертификат SSL', sslTxt) +
+    row(botOk, 'Проверка на клоакинг', botOk ? 'совпадает' : 'расхождение') +
+    row(listsOk, 'Списки спама', listsTxt) +
+    row(gsbOk, 'Google Safe Browsing', gsbTxt, gsbCls) +
+    `</div>`;
 }
 
 function checkIcon(got, max) {
@@ -180,7 +286,9 @@ function checkIcon(got, max) {
 }
 
 function detailHTML(r) {
-  let h = `<div class="fin">Конечный адрес: <span class="link">${esc(r.finalUrl || '')}</span></div><div class="checks">`;
+  let h = `<div class="fin">Конечный адрес: <span class="link">${esc(r.finalUrl || '')}</span></div>`;
+  h += auditCard(r);
+  h += `<div class="checks">`;
   for (const c of (r.checks || [])) {
     h += `<div class="check">${checkIcon(c.got, c.max)}<div>` +
       `<div class="ct">${esc(c.name)} — <b>+${c.got}</b></div>` +
@@ -233,7 +341,7 @@ async function run() {
     progress.textContent = `Проверяю ${i}/${links.length}: ${link} ...`;
     const tr = document.createElement('tr');
     tr.className = 'row';
-    tr.innerHTML = `<td>...</td><td>...</td><td class="link">${esc(link)}</td>`;
+    tr.innerHTML = `<td>...</td><td>...</td>`;
     rows.appendChild(tr);
     try {
       const res = await fetch('/api/check', {
@@ -243,22 +351,21 @@ async function run() {
       });
       const r = await res.json();
       if (r.error) {
-        tr.innerHTML = `<td>—</td><td>${badge('ОШИБКА')}</td><td class="link">${esc(link)} (${esc(r.error)})</td>`;
+        tr.innerHTML = `<td class="link">${esc(link)}</td><td>${badge('ОШИБКА')}<div class="link-sm">${esc(r.error)}</div></td>`;
       } else {
-        const id = 'd' + Date.now() + i;
-        tr.innerHTML = `<td><b>${r.score}</b><div class="bar"><div style="width:${r.score}%;background:${barColor(r.score)}"></div></div></td>` +
-          `<td>${badge(r.word)}<br><small style="color:var(--muted)">${esc(r.verdict.split(':')[0])}</small></td>` +
-          `<td class="link">${esc(link)}</td>`;
+        const z = zoneOf(r.score);
+        const host = esc(r.host || link);
+        tr.innerHTML = `<td><div class="host">${host}</div><div class="link-sm link">${esc(link)}</div></td>` +
+          `<td><span class="score ${z.cls}">${r.score} ${z.label}</span>${signalBadges(r)}</td>`;
         const dtr = document.createElement('tr');
         dtr.className = 'detail';
-        dtr.id = id;
-        dtr.innerHTML = `<td colspan="3">${detailHTML(r, id)}</td>`;
+        dtr.innerHTML = `<td colspan="2">${detailHTML(r)}</td>`;
         dtr.style.display = 'table-row';
         rows.appendChild(dtr);
         tr.onclick = () => { dtr.style.display = dtr.style.display === 'table-row' ? 'none' : 'table-row'; };
       }
     } catch (e) {
-      tr.innerHTML = `<td>—</td><td>${badge('ОШИБКА')}</td><td class="link">${esc(link)} (нет связи)</td>`;
+      tr.innerHTML = `<td class="link">${esc(link)}</td><td>${badge('ОШИБКА')}<div class="link-sm">нет связи</div></td>`;
     }
   }
   progress.textContent = `Готово: ${links.length} шт.`;
@@ -353,7 +460,7 @@ keyStatus();
   try {
     const res = await fetch('/api/version');
     const j = await res.json();
-    if (j.version) document.getElementById('ver').textContent = 'Версия ' + j.version + '.';
+    if (j.version) document.getElementById('ver').textContent = 'v' + j.version;
   } catch (e) { /* молча */ }
 })();
 </script>

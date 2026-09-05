@@ -12,7 +12,7 @@ import (
 )
 
 // Номер версии — показывается на странице и в консоли, чтобы не путать сборки.
-const AppVersion = "1.2.0"
+const AppVersion = "1.3.0"
 
 var (
 	reMetaRefresh = regexp.MustCompile(`(?i)<meta[^>]+http-equiv=["']?refresh`)
