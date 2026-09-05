@@ -38,6 +38,26 @@ var (
 	}
 )
 
+// Точки подмены для тестов: в обычной работе указывают на настоящие функции.
+var (
+	resolveFn     = resolveGuard
+	tlsFn         = func(host string) tlsOut { return tlsInfo(host+":443", host) }
+	ageFn         = rdapAge
+	gsbFn         = gsbListed
+	hostingFn     = hostingInfo
+	listsFn       = listsOf
+	newScanClient = func() *http.Client {
+		return &http.Client{
+			Timeout: timeoutMs * time.Millisecond,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+	}
+	// Только для тестов: не проверять подпись сертификата.
+	tlsSkipVerify = false
+)
+
 // Домен должен находиться и вести наружу (защита от подмены).
 // Возвращает первый внешний адрес — он нужен для справки о хостинге.
 func resolveGuard(host string) (string, error) {
@@ -98,12 +118,7 @@ func fetchOnce(client *http.Client, urlStr, ua string) (int, http.Header, string
 
 // Идёт по цепочке переадресаций вручную и записывает каждый шаг.
 func fetchChain(start, ua string) fetchOut {
-	client := &http.Client{
-		Timeout: timeoutMs * time.Millisecond,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	client := newScanClient()
 	out := fetchOut{}
 	cur := start
 	for i := 0; i <= maxRedirects; i++ {
@@ -143,9 +158,9 @@ type tlsOut struct {
 	daysLeft int
 }
 
-func tlsInfo(host string) tlsOut {
+func tlsInfo(addr, server string) tlsOut {
 	dialer := &net.Dialer{Timeout: timeoutMs * time.Millisecond}
-	conn, err := tls.DialWithDialer(dialer, "tcp", host+":443", &tls.Config{ServerName: host})
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: server, InsecureSkipVerify: tlsSkipVerify})
 	if err != nil {
 		return tlsOut{}
 	}
@@ -368,6 +383,30 @@ func urlhausListed(pageURL string) bool {
 // Следы страниц доверия: контакты, политика. Их любит Pinterest.
 var reTrust = regexp.MustCompile(`(?i)(privacy|confiden|policy|terms|contact|kontakt|about|imprint|оферт|конфиденц|контакт|связаться)`)
 
+// Проверка по трём чёрным спискам сразу. Возвращает имена сработавших и был ли отказ.
+func listsOf(host, finalURL string) (bad []string, refused bool) {
+	type listHit struct {
+		name string
+		hit  bool
+	}
+	listCh := make(chan listHit, 3)
+	go func() {
+		hit, no := dblListed(host)
+		if no {
+			refused = true
+		}
+		listCh <- listHit{"Spamhaus DBL", hit}
+	}()
+	go func() { listCh <- listHit{"SURBL", surblListed(host)} }()
+	go func() { listCh <- listHit{"URLhaus", urlhausListed(finalURL)} }()
+	for i := 0; i < 3; i++ {
+		if h := <-listCh; h.hit {
+			bad = append(bad, h.name)
+		}
+	}
+	return bad, refused
+}
+
 // Полная проверка одной ссылки.
 func checkOne(link string) check.Result {
 	r := check.Result{Link: link, Notes: []string{}, Checks: []check.CheckPart{}, Hops: []string{}}
@@ -378,12 +417,12 @@ func checkOne(link string) check.Result {
 	}
 	r.Host = host
 
-	if ip, err := resolveGuard(host); err != nil {
+	if ip, err := resolveFn(host); err != nil {
 		r.Host = host
 		r.Error = "Домен не находится, проверять нечего"
 		return r
 	} else {
-		r.Info = append(r.Info, hostingInfo(ip))
+		r.Info = append(r.Info, hostingFn(ip))
 	}
 
 	// Цепочка переадресаций (главное для Pinterest).
@@ -446,7 +485,7 @@ func checkOne(link string) check.Result {
 	if finalHost == "" {
 		finalHost = host
 	}
-	t := tlsInfo(finalHost)
+	t := tlsFn(finalHost)
 	switch {
 	case t.ok && (t.protocol == "TLSv1.3" || t.protocol == "TLSv1.2") && t.daysLeft > 30:
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Шифрование", Got: 25, Max: 25, Note: "сертификат в порядке (" + t.protocol + ")"})
@@ -491,7 +530,7 @@ func checkOne(link string) check.Result {
 	r.Checks = append(r.Checks, check.CheckPart{Name: "Заголовки", Got: hg, Max: 5, Note: hnote})
 
 	// Возраст.
-	if months := rdapAge(host); months == nil {
+	if months := ageFn(host); months == nil {
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 5, Max: 15, Note: "возраст узнать не вышло — считаем с опаской"})
 	} else if *months >= 24 {
 		r.Checks = append(r.Checks, check.CheckPart{Name: "Возраст", Got: 15, Max: 15, Note: fmt.Sprintf("домену ~%d г. — старый, это плюс", *months/12)})
@@ -547,7 +586,7 @@ func checkOne(link string) check.Result {
 		}
 	}
 	// Внешний вердикт Google. Нужен бесплатный ключ в файле gsb.key рядом с кнопками.
-	gsbHit := gsbListed(finalURL)
+	gsbHit := gsbFn(finalURL)
 	if gsbHit {
 		penalty += 15
 		r.Notes = append(r.Notes, "Google считает ссылку опасной — Pinterest такие режет почти наверняка.")
@@ -560,25 +599,9 @@ func checkOne(link string) check.Result {
 		r.Info = append(r.Info, "Google: чисто")
 	}
 	// Чёрные списки спама: три штуки сразу, чтобы было дольше, зато честно.
-	type listHit struct {
-		name string
-		hit  bool
-	}
-	listCh := make(chan listHit, 3)
-	go func() {
-		hit, refused := dblListed(host)
-		if refused {
-			r.Info = append(r.Info, "Spamhaus: спросить не вышло")
-		}
-		listCh <- listHit{"Spamhaus DBL", hit}
-	}()
-	go func() { listCh <- listHit{"SURBL", surblListed(host)} }()
-	go func() { listCh <- listHit{"URLhaus", urlhausListed(finalURL)} }()
-	badLists := []string{}
-	for i := 0; i < 3; i++ {
-		if h := <-listCh; h.hit {
-			badLists = append(badLists, h.name)
-		}
+	badLists, listsRefused := listsFn(host, finalURL)
+	if listsRefused {
+		r.Info = append(r.Info, "Spamhaus: спросить не вышло")
 	}
 	if len(badLists) > 0 {
 		penalty += 15
