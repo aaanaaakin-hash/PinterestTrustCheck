@@ -21,15 +21,15 @@ func printOne(r check.Result) {
 		fmt.Printf("- %s: %d/%d — %s\n", p.Name, p.Got, p.Max, p.Note)
 	}
 	if len(r.Notes) > 0 {
-		fmt.Println("\nНа что обратить внимание:")
+		fmt.Println("\nПредупреждения:")
 		for _, n := range r.Notes {
-			fmt.Printf("  ! %s\n", n)
+			fmt.Printf("  - %s\n", n)
 		}
 	}
 	if len(r.Info) > 0 {
-		fmt.Println("\nСправочно:")
+		fmt.Println("\nСправка:")
 		for _, s := range r.Info {
-			fmt.Printf("  • %s\n", s)
+			fmt.Printf("  - %s\n", s)
 		}
 	}
 }

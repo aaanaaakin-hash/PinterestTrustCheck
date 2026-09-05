@@ -138,6 +138,7 @@
   .ic.ok { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid var(--green); }
   .ic.mid { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid var(--yellow); }
   .ic.bad { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid var(--red); }
+  .ic.info { background: rgba(47,129,247,0.15); color: var(--accent); border: 1px solid var(--accent); }
   .ct { font-size: 14px; }
   .ct b { color: var(--green); }
   .cn { color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -294,20 +295,15 @@ function detailHTML(r) {
       `<div class="cn">${esc(c.note)}</div></div></div>`;
   }
   h += '</div>';
-  if ((r.notes || []).length) {
-    h += '<div class="sec-t">Обрати внимание:</div><ul>';
-    for (const n of r.notes) h += `<li class="note-warn">${esc(n)}</li>`;
-    h += '</ul>';
+  // Всё одним потоком карточек: предупреждения, справка, путь. Разделять нечего — это один разбор.
+  for (const n of (r.notes || [])) {
+    h += `<div class="check"><span class="ic mid">!</span><div><div class="ct note-warn">${esc(n)}</div></div></div>`;
   }
-  if ((r.info || []).length) {
-    h += '<div class="sec-t">Справочно:</div><ul>';
-    for (const s of r.info) h += `<li class="cn">${esc(s)}</li>`;
-    h += '</ul>';
+  for (const s of (r.info || [])) {
+    h += `<div class="check"><span class="ic info">i</span><div><div class="cn" style="font-size:13px;">${esc(s)}</div></div></div>`;
   }
-  if ((r.hops || []).length) {
-    h += '<div class="sec-t">Путь ссылки:</div><ul>';
-    for (const x of r.hops) h += `<li class="link">${esc(x)}</li>`;
-    h += '</ul>';
+  for (const x of (r.hops || [])) {
+    h += `<div class="check"><span class="ic info">➔</span><div><div class="ct link" style="font-size:13px;">${esc(x)}</div></div></div>`;
   }
   return h;
 }
