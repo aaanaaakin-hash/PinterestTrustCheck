@@ -9,3 +9,6 @@ otx.key
 vt.key
 history.csv
 results.csv
+
+archive/
+.repowise/

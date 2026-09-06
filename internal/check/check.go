@@ -12,7 +12,7 @@ import (
 )
 
 // Номер версии — показывается на странице и в консоли, чтобы не путать сборки.
-const AppVersion = "1.8.0"
+const AppVersion = "1.8.1"
 
 var (
 	reMetaRefresh = regexp.MustCompile(`(?i)<meta[^>]+http-equiv=["']?refresh`)
@@ -245,9 +245,7 @@ type ReadLink struct {
 
 func ReadLinks(host string) []ReadLink {
 	return []ReadLink{
-		{"Google: отзывы про домен", "https://www.google.com/search?q=" + url.QueryEscape(`"`+host+`" pinterest`)},
-		{"Google: баны и жалобы", "https://www.google.com/search?q=" + url.QueryEscape("pinterest ban "+host+" spam")},
-		{"Reddit: свежие треды", "https://www.reddit.com/search/?q=pinterest+cloaking+ban&sort=new"},
-		{"Bing: запасной поиск", "https://www.bing.com/search?q=" + url.QueryEscape(`"`+host+`"`)},
+		{"Google по-русски: как Pinterest воспринимает домен — русские отзывы и жалобы", "https://www.google.com/search?q=" + url.QueryEscape(`Как Pinterest воспринимает "`+host+`"`) + "&hl=ru"},
+		{"Google по-английски: how Pinterest views the domain — английские источники, их обычно больше", "https://www.google.com/search?q=" + url.QueryEscape(`How does Pinterest view "`+host+`"`) + "&hl=en"},
 	}
 }

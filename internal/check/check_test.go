@@ -148,14 +148,14 @@ func TestServeAddr(t *testing.T) {
 
 func TestReadLinks(t *testing.T) {
 	list := check.ReadLinks("example.com")
-	if len(list) != 4 {
-		t.Fatalf("ссылок %d, ждали 4", len(list))
+	if len(list) != 2 {
+		t.Fatalf("ссылок %d, ждали 2", len(list))
 	}
 	if !strings.Contains(list[0].URL, "google.com/search") || !strings.Contains(list[0].URL, "example.com") {
-		t.Errorf("первая ссылка странная: %s", list[0].URL)
+		t.Errorf("русская ссылка странная: %s", list[0].URL)
 	}
-	if !strings.Contains(list[2].URL, "reddit.com") {
-		t.Errorf("третья ссылка не на реддит: %s", list[2].URL)
+	if !strings.Contains(list[1].URL, "google.com/search") || !strings.Contains(list[1].URL, "example.com") {
+		t.Errorf("английская ссылка странная: %s", list[1].URL)
 	}
 	for _, l := range list {
 		if l.Name == "" || l.URL == "" || strings.Contains(l.URL, " ") {

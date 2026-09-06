@@ -318,14 +318,11 @@ function detailHTML(r) {
 // Ссылки поиска собираем тут же, в браузере: программа ничего не ищет,
 // только подставляет домен в шаблон. Запросы на английском — так ответы полнее.
 function readLinks(host) {
-  const q = encodeURIComponent('"' + host + '" pinterest');
-  const q2 = encodeURIComponent('pinterest ban ' + host + ' spam');
-  const q3 = encodeURIComponent('"' + host + '"');
+  const q = encodeURIComponent('Как Pinterest воспринимает "' + host + '"');
+  const q2 = encodeURIComponent('How does Pinterest view "' + host + '"');
   return [
-    { name: 'Google: отзывы про домен', url: 'https://www.google.com/search?q=' + q },
-    { name: 'Google: баны и жалобы', url: 'https://www.google.com/search?q=' + q2 },
-    { name: 'Reddit: свежие треды', url: 'https://www.reddit.com/search/?q=pinterest+cloaking+ban&sort=new' },
-    { name: 'Bing: запасной поиск', url: 'https://www.bing.com/search?q=' + q3 }
+    { name: 'Google по-русски: как Pinterest воспринимает домен — русские отзывы и жалобы', url: 'https://www.google.com/search?q=' + q + '&hl=ru' },
+    { name: 'Google по-английски: how Pinterest views the domain — английские источники, их обычно больше', url: 'https://www.google.com/search?q=' + q2 + '&hl=en' }
   ];
 }
 
